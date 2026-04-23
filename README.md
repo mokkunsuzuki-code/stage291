@@ -1,21 +1,20 @@
-# Stage290: Verification URL UI
+# Stage291: Persistent Verification Result URL (JSON Storage)
 
 ## Overview
 
-Stage290 transforms the Stage289 Verification API into a **human-friendly verification URL interface**.
+Stage291 upgrades Stage290 by adding **JSON-based persistence** for verification results.
 
-Users can input a URL and a manifest, then receive:
+Users can:
 
-- Decision (accept / pending / reject)
-- Trust score
-- Trust breakdown (Integrity / Execution / Identity / Time)
-- Verification ID
-- Timestamp
-- Shareable result URL
+- Input URL + manifest
+- Get verification result (accept / pending / reject)
+- Receive trust score and breakdown
+- Generate a shareable verification URL
+- Store results as JSON for later retrieval
 
-This stage converts:
+This stage transforms:
 
-Verification API → Verification Experience
+Verification UI → Persistent Verification Record
 
 ---
 
@@ -24,30 +23,27 @@ Verification API → Verification Experience
 ### 1. Human-Friendly Verification UI
 No terminal or JSON parsing required.
 
-### 2. Shareable Verification Result
-Each verification produces a unique:
+### 2. Persistent Result Storage
+Each verification result is stored as:
 
-- Verification ID
-- Timestamp
-- Public result URL
+results/<verification_id>.json
+
+### 3. Shareable Verification URL
 
 Example:
 
-
-https://stage290.onrender.com/result/
-<verification_id>
-
+https://stage291.onrender.com/result/<verification_id>
 
 ---
 
-### 3. Trust Model Visualization
+### 4. Trust Model
 
 The system evaluates:
 
-- Integrity (hash / evidence)
-- Execution (workflow / CI)
-- Identity (signer / key)
-- Time (timestamp / reproducibility)
+- Integrity
+- Execution
+- Identity
+- Time
 
 Final decision:
 
@@ -57,83 +53,88 @@ Final decision:
 
 ---
 
-### 4. Fail-Closed Design
+### 5. Fail-Closed Design
 
-If verification is incomplete or invalid:
+If verification is incomplete:
 
 → system does NOT accept  
-→ explicit reject or pending
+→ returns pending or reject
 
 ---
 
 ## Architecture
 
-
 User (Browser)
 ↓
-Stage290 UI
+Stage291 UI
 ↓
-Stage289 Verification API
+Stage289 API
 ↓
-Decision + Evidence
+Result + Evidence
 ↓
-Human-readable result page
-
+JSON storage
+↓
+Re-loadable verification page
 
 ---
 
-## API Dependency
+## Flow
 
-This stage depends on:
-
-Stage289 Verification API
-
-
-POST /verify
-
-
----
-
-## Example Flow
-
-1. Enter URL + manifest
-2. Click "Verify"
-3. System calls Stage289 API
-4. Result page generated
-5. Shareable URL issued
+1. Input URL + manifest
+2. POST to Stage289 API
+3. Receive decision + trust score
+4. Save JSON record
+5. Generate shareable URL
+6. Reload anytime via /result/<id>
 
 ---
 
 ## Why This Matters
 
-Previous stages proved:
+Previous stages:
 
-- verification
+- Stage289 → machine verification
+- Stage290 → human-friendly UI
+
+Stage291 adds:
+
+- persistence
 - reproducibility
-- public exposure
+- shareable proof structure
 
-Stage290 adds:
+This is the transition from:
 
-- usability
-- accessibility
-- shareability
-
-This is the step from:
-
-Technical validation → Product experience
+verification experience → verification record
 
 ---
 
-## Limitations (Important)
+## Storage Model
 
-Current implementation:
+- JSON file per verification
+- Simple, transparent, inspectable
+- Easy to upgrade to DB later
 
-- Results stored in memory (temporary)
-- May reset on server restart
+---
 
-Next stage:
+## Limitation (Important)
 
-Stage291 → Persistent verification records
+Render free tier:
+
+- filesystem persistence is NOT guaranteed across redeploys
+
+Local environment:
+
+- persistence works reliably
+
+---
+
+## Next Stage
+
+Stage292:
+
+- SQLite persistence
+- stronger durability
+- production-ready verification records
 
 ---
 

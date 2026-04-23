@@ -2,18 +2,19 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <title>Stage292 - Verification URL UI (SQLite)</title>
+  <title>Stage293 - Verification Search & Filter UI</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   <main class="container">
     <header class="hero">
-      <h1>Stage292</h1>
-      <p class="subtitle">Verification URL UI + SQLite Persistence</p>
+      <h1>Stage293</h1>
+      <p class="subtitle">Verification URL UI + Search / Filter + SQLite Persistence</p>
       <div class="badges">
-        <span>Page Stage: 292</span>
+        <span>Page Stage: 293</span>
         <span>Storage: SQLite</span>
+        <span>Search: Enabled</span>
         <span>Fail-Closed: Enabled</span>
       </div>
     </header>
@@ -24,7 +25,7 @@
       <input id="url" type="text" value="https://example.com/verify">
 
       <label for="manifest">manifest JSON</label>
-      <textarea id="manifest" rows="16">{
+      <textarea id="manifest" rows="14">{
   "url": "https://example.com/verify",
   "subject": {
     "name": "sample"
@@ -39,18 +40,44 @@
 
       <div class="actions">
         <button id="sampleBtn" type="button">サンプル入力</button>
-        <button id="verifyBtn" type="button">検証してSQLiteに保存</button>
+        <button id="verifyBtn" type="button">検証して保存</button>
       </div>
     </section>
 
     <section class="panel">
-      <h2>最新結果</h2>
+      <h2>検索・フィルタ</h2>
+
+      <label for="decisionFilter">Decision</label>
+      <select id="decisionFilter">
+        <option value="">すべて</option>
+        <option value="accept">accept</option>
+        <option value="pending">pending</option>
+        <option value="reject">reject</option>
+      </select>
+
+      <label for="urlQuery">URL 部分一致</label>
+      <input id="urlQuery" type="text" placeholder="example.com">
+
+      <label for="minScore">最小 Trust Score</label>
+      <input id="minScore" type="number" min="0" max="1" step="0.001" placeholder="0.600">
+
+      <label for="limit">表示件数</label>
+      <input id="limit" type="number" min="1" max="100" step="1" value="20">
+
+      <div class="actions">
+        <button id="searchBtn" type="button">検索実行</button>
+        <button id="clearBtn" type="button">条件クリア</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>最新結果 / 詳細</h2>
       <div id="resultCard" class="result-card empty">まだ検証結果はありません。</div>
     </section>
 
     <section class="panel">
-      <h2>保存履歴</h2>
-      <button id="refreshBtn" type="button">履歴を更新</button>
+      <h2>保存履歴 / 検索結果</h2>
+      <div id="historyMeta" class="history-meta">検索結果はまだありません。</div>
       <div id="history" class="history"></div>
     </section>
   </main>

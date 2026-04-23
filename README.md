@@ -1,96 +1,85 @@
-# Stage292: Verification URL UI + SQLite Persistence
+# Stage293: Verification URL UI + Search / Filter + SQLite Persistence
 
 ## Overview
 
-Stage292 extends the Verification URL UI by adding **persistent storage using SQLite**.
+Stage293 extends the verification system by adding **search and filtering capabilities** on top of SQLite persistence.
 
-This stage transforms verification from a one-time UI interaction into a **persistent verification log system**.
+This transforms the system from simple storage into a **practical verification log system**.
 
 ---
 
-## Key Concept
+## Key Evolution
 
 Stage291:
-- Verification via browser UI
-- JSON-based output (ephemeral)
+- UI-based verification
+- JSON output
 
 Stage292:
-- Verification via browser UI
-- **SQLite-based persistence**
-- Verification history tracking
-- Reproducible inspection
+- SQLite persistence
+- Verification history
+
+Stage293:
+- **Search / Filter enabled**
+- Queryable verification logs
+- Practical audit system
 
 ---
 
 ## What This Stage Proves
 
-- Verification results can be stored persistently
-- Each verification is reproducible and queryable
-- Fail-closed decisions are recorded with reasons
-- Both success and failure are auditable
+- Verification logs can be queried dynamically
+- Results can be filtered by decision, URL, and trust score
+- Both ACCEPT and REJECT outcomes are searchable
+- Verification history becomes operationally usable
 
 ---
 
 ## Architecture
 
-
-User Input (URL + Manifest)
-↓
-Verification Logic (fail-closed)
-↓
-Decision + Trust Score
-↓
-SQLite Storage (stage292.db)
-↓
-History / Detail View (UI)
-
+User Input → Verification → SQLite Storage → Search / Filter → UI Display
 
 ---
 
 ## Features
 
-- Verification UI (browser-based)
-- SQLite persistence (`data/stage292.db`)
-- History listing (latest first)
-- Detailed verification inspection
-- Fail-closed enforcement
-- Trust score calculation
+- Verification UI (browser)
+- SQLite persistence (`data/stage293.db`)
+- Decision filtering (accept / pending / reject)
+- URL partial match search
+- Trust score filtering
+- Result limit control
+- Detailed result inspection
 
 ---
 
-## Example Outcomes
+## Example Use Cases
 
-### ACCEPT (valid input)
-- trust_score: 1.000
-- decision: accept
-
-### REJECT (invalid / empty input)
-- trust_score: 0.000
-- decision: reject
+- Show only ACCEPT results
+- Find failed (REJECT) verifications
+- Search by URL keyword
+- Extract high-trust results (score ≥ 0.9)
 
 ---
 
-## API Endpoints
+## API
 
-### Health Check
-
+### Health
 GET /api/health
 
-
-### Verify and Save
-
+### Verify
 POST /api/verify
 
-
-### List Results
-
+### Search Results
 GET /api/results
 
+Query parameters:
+- decision=accept|pending|reject
+- url_query=keyword
+- min_score=0.0–1.0
+- limit=1–100
 
 ### Result Detail
-
 GET /api/results/{id}
-
 
 ---
 
@@ -102,30 +91,29 @@ source .venv/bin/activate
 
 pip install -r requirements.txt
 
-python tools/init_db.py
 python app.py
 
 Open:
+http://127.0.0.1:2930
 
-http://127.0.0.1:2920
 Storage
 
-SQLite file:
+SQLite database:
+data/stage293.db
 
-data/stage292.db
-Important Design Principle
+Security Model
 
-This system is fail-closed:
+Fail-Closed:
 
 Invalid input → REJECT
 Missing data → REJECT
-No silent acceptance
-Evolution Path
+No silent success
+Evolution
 
-Stage290: UI (visualization layer)
-Stage291: JSON persistence
-Stage292: SQLite persistence (this stage)
-Stage293+: Query / filtering / analytics
+Stage290: UI
+Stage291: JSON
+Stage292: SQLite
+Stage293: Search / Filter (this stage)
 
 License
 

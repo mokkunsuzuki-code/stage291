@@ -12,7 +12,7 @@ from flask import Flask, jsonify, render_template, request
 
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"
-DB_PATH = DATA_DIR / "stage292.db"
+DB_PATH = DATA_DIR / "stage293.db"
 
 app = Flask(__name__)
 
@@ -45,6 +45,15 @@ def init_db() -> None:
 
     CREATE INDEX IF NOT EXISTS idx_verification_results_created_at
     ON verification_results(created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_verification_results_decision
+    ON verification_results(decision);
+
+    CREATE INDEX IF NOT EXISTS idx_verification_results_input_url
+    ON verification_results(input_url);
+
+    CREATE INDEX IF NOT EXISTS idx_verification_results_trust_score
+    ON verification_results(trust_score);
     """
     conn = get_db()
     try:
@@ -195,7 +204,7 @@ def verify_payload(input_url: str, manifest_text: str) -> dict[str, Any]:
     else:
         decision = "reject"
 
-    summary = {
+    return {
         "decision": decision,
         "trust_score": trust_score,
         "fail_closed": fail_closed,
@@ -203,7 +212,6 @@ def verify_payload(input_url: str, manifest_text: str) -> dict[str, Any]:
         "manifest_sha256": manifest_digest,
         "verified_at": utc_now_iso(),
     }
-    return summary
 
 
 def save_result(input_url: str, manifest_text: str, result: dict[str, Any]) -> int:
@@ -250,7 +258,7 @@ def index():
 def health():
     return jsonify({
         "ok": True,
-        "stage": 292,
+        "stage": 293,
         "storage": "sqlite",
         "db_path": str(DB_PATH.name),
     })
@@ -276,22 +284,58 @@ def api_verify():
 @app.route("/api/results", methods=["GET"])
 def api_results():
     limit_raw = request.args.get("limit", "20")
+    decision = request.args.get("decision", "").strip().lower()
+    url_query = request.args.get("url_query", "").strip()
+    min_score_raw = request.args.get("min_score", "").strip()
+
     try:
         limit = max(1, min(100, int(limit_raw)))
     except ValueError:
         limit = 20
 
+    allowed_decisions = {"accept", "pending", "reject"}
+    if decision not in allowed_decisions:
+        decision = ""
+
+    min_score = None
+    if min_score_raw:
+        try:
+            parsed = float(min_score_raw)
+            min_score = max(0.0, min(1.0, parsed))
+        except ValueError:
+            min_score = None
+
+    where_clauses = []
+    params: list[Any] = []
+
+    if decision:
+        where_clauses.append("decision = ?")
+        params.append(decision)
+
+    if url_query:
+        where_clauses.append("input_url LIKE ?")
+        params.append(f"%{url_query}%")
+
+    if min_score is not None:
+        where_clauses.append("trust_score >= ?")
+        params.append(min_score)
+
+    where_sql = ""
+    if where_clauses:
+        where_sql = "WHERE " + " AND ".join(where_clauses)
+
+    query = f"""
+        SELECT id, created_at, input_url, decision, trust_score, fail_closed, manifest_sha256
+        FROM verification_results
+        {where_sql}
+        ORDER BY id DESC
+        LIMIT ?
+    """
+    params.append(limit)
+
     conn = get_db()
     try:
-        rows = conn.execute(
-            """
-            SELECT id, created_at, input_url, decision, trust_score, fail_closed, manifest_sha256
-            FROM verification_results
-            ORDER BY id DESC
-            LIMIT ?
-            """,
-            (limit,),
-        ).fetchall()
+        rows = conn.execute(query, params).fetchall()
     finally:
         conn.close()
 
@@ -309,6 +353,13 @@ def api_results():
 
     return jsonify({
         "ok": True,
+        "filters": {
+            "decision": decision,
+            "url_query": url_query,
+            "min_score": min_score,
+            "limit": limit,
+        },
+        "count": len(items),
         "items": items,
     })
 
@@ -350,4 +401,4 @@ def api_result_detail(result_id: int):
 
 if __name__ == "__main__":
     init_db()
-    app.run(host="127.0.0.1", port=2920, debug=True)
+    app.run(host="127.0.0.1", port=2930, debug=True)

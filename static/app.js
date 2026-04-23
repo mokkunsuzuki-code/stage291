@@ -2,8 +2,16 @@ const urlInput = document.getElementById("url");
 const manifestInput = document.getElementById("manifest");
 const verifyBtn = document.getElementById("verifyBtn");
 const sampleBtn = document.getElementById("sampleBtn");
-const refreshBtn = document.getElementById("refreshBtn");
+
+const decisionFilter = document.getElementById("decisionFilter");
+const urlQueryInput = document.getElementById("urlQuery");
+const minScoreInput = document.getElementById("minScore");
+const limitInput = document.getElementById("limit");
+const searchBtn = document.getElementById("searchBtn");
+const clearBtn = document.getElementById("clearBtn");
+
 const resultCard = document.getElementById("resultCard");
+const historyMeta = document.getElementById("historyMeta");
 const historyBox = document.getElementById("history");
 
 function decisionClass(decision) {
@@ -59,14 +67,45 @@ async function verifyAndSave() {
   await loadHistory();
 }
 
+function buildQueryString() {
+  const params = new URLSearchParams();
+
+  if (decisionFilter.value) {
+    params.set("decision", decisionFilter.value);
+  }
+  if (urlQueryInput.value.trim()) {
+    params.set("url_query", urlQueryInput.value.trim());
+  }
+  if (minScoreInput.value.trim()) {
+    params.set("min_score", minScoreInput.value.trim());
+  }
+  if (limitInput.value.trim()) {
+    params.set("limit", limitInput.value.trim());
+  } else {
+    params.set("limit", "20");
+  }
+
+  return params.toString();
+}
+
 async function loadHistory() {
-  const res = await fetch("/api/results?limit=20");
+  const query = buildQueryString();
+  const res = await fetch(`/api/results?${query}`);
   const data = await res.json();
 
   if (!data.ok || !data.items.length) {
-    historyBox.innerHTML = `<div class="history-empty">履歴はまだありません。</div>`;
+    historyMeta.textContent = "一致する履歴はありません。";
+    historyBox.innerHTML = `<div class="history-empty">条件に一致する履歴はありません。</div>`;
+    resultCard.className = "result-card empty";
+    resultCard.innerHTML = "まだ検証結果はありません。";
     return;
   }
+
+  historyMeta.textContent =
+    `件数: ${data.count} / decision=${data.filters.decision || "all"} / ` +
+    `url_query=${data.filters.url_query || "-"} / ` +
+    `min_score=${data.filters.min_score ?? "-"} / ` +
+    `limit=${data.filters.limit}`;
 
   historyBox.innerHTML = data.items.map(item => `
     <div class="history-item">
@@ -124,8 +163,17 @@ function loadSample() {
   }, null, 2);
 }
 
+function clearFilters() {
+  decisionFilter.value = "";
+  urlQueryInput.value = "";
+  minScoreInput.value = "";
+  limitInput.value = "20";
+  loadHistory();
+}
+
 verifyBtn.addEventListener("click", verifyAndSave);
 sampleBtn.addEventListener("click", loadSample);
-refreshBtn.addEventListener("click", loadHistory);
+searchBtn.addEventListener("click", loadHistory);
+clearBtn.addEventListener("click", clearFilters);
 
 loadHistory();

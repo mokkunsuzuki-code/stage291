@@ -1,10 +1,10 @@
-# Stage294: Verification URL UI + Search / Filter + Export + SQLite Persistence
+# Stage295: Verification URL UI + Stage289 API Integration + Search / Filter + Export + SQLite Persistence
 
 ## Overview
 
-Stage294 extends the verification log system by adding **export capabilities** on top of search, filtering, and SQLite persistence.
+Stage295 integrates the verification UI and persistence system with the real verification backend provided by **Stage289 Verification API**.
 
-This stage transforms the system from an internal verification log into an **externally shareable evidence system**.
+This stage replaces local dummy verification with **upstream API-based verification**, while preserving search, filtering, export, and SQLite-based persistence.
 
 ---
 
@@ -23,48 +23,50 @@ Stage293:
 - Practical verification log system
 
 Stage294:
-- **JSON / CSV export**
-- Search-aware export
+- JSON / CSV export
 - External sharing / submission ready
+
+Stage295:
+- **Real API integration**
+- Verification delegated to Stage289
+- Full-stack verification workflow
 
 ---
 
 ## What This Stage Proves
 
-- Verification logs can be queried and exported
-- Export output reflects search / filter conditions
-- ACCEPT / REJECT results can be shared externally
-- Verification evidence becomes submission-ready
+- Verification can be delegated to a real upstream verification API
+- Verification UI, persistence, search, and export can operate on upstream results
+- Upstream verification failures are handled fail-closed
+- Verification history records both result and upstream status
 
 ---
 
 ## Architecture
 
-User Input → Verification → SQLite Storage → Search / Filter → Export (JSON / CSV) → External Sharing
+User Input  
+→ Stage295 UI  
+→ Stage289 Verification API  
+→ Verification Result  
+→ SQLite Storage  
+→ Search / Filter  
+→ Export (JSON / CSV)
 
 ---
 
 ## Features
 
 - Verification UI (browser)
-- SQLite persistence (`data/stage294.db`)
+- Real Stage289 API integration
+- SQLite persistence (`data/stage295.db`)
 - Decision filtering (`accept / pending / reject`)
 - URL partial match search
 - Trust score filtering
-- Result limit control
 - JSON export
 - CSV export
+- Upstream source / status recording
 - Detailed result inspection
-
----
-
-## Example Use Cases
-
-- Export only ACCEPT results
-- Export failed REJECT verifications
-- Export search results for a specific URL
-- Export high-trust results only
-- Submit verification evidence to external reviewers
+- Fail-closed on upstream failure
 
 ---
 
@@ -98,23 +100,40 @@ Export endpoints support the same query parameters as `/api/results`.
 
 ---
 
-## Local Run
+## Stage289 Integration
+
+Default upstream verification endpoint:
+
+http://127.0.0.1:2890/api/verify
+
+Override with environment variable:
 
 ```bash
+export STAGE289_VERIFY_URL="http://127.0.0.1:2890/api/verify"
+
+Stage295 delegates verification to Stage289 instead of making a local decision.
+
+Local Run
+Start Stage289
+cd ~/Desktop/test/stage289
 python3 -m venv .venv
 source .venv/bin/activate
-
 pip install -r requirements.txt
-
+python app.py
+Start Stage295
+cd ~/Desktop/test/stage295
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 python app.py
 
 Open:
-http://127.0.0.1:2940
+http://127.0.0.1:2950
 
 Storage
 
 SQLite database:
-data/stage294.db
+data/stage295.db
 
 Security Model
 
@@ -122,27 +141,25 @@ Fail-Closed:
 
 Invalid input → REJECT
 Missing data → REJECT
+Upstream API failure → REJECT
 No silent success
 Why This Stage Matters
 
-Stage293 made verification logs searchable.
+Stage294 made verification logs portable.
 
-Stage294 makes them portable.
+Stage295 makes them real.
 
-This means the system can now support:
+This means the system is no longer only a UI/logging layer:
+it is now connected to the actual verification backend.
 
-audit submission
-external review
-team sharing
-evidence attachment
-reproducible reporting
 Evolution
 
 Stage290: UI
 Stage291: JSON
 Stage292: SQLite
 Stage293: Search / Filter
-Stage294: Export (this stage)
+Stage294: Export
+Stage295: Stage289 API Integration (this stage)
 
 License
 

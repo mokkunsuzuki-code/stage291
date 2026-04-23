@@ -24,7 +24,7 @@ function decisionClass(decision) {
 }
 
 function renderResult(result, id = null) {
-  const reasonsHtml = result.reasons.map(item => `
+  const reasonsHtml = (result.reasons || []).map(item => `
     <li class="${item.ok ? "ok" : "ng"}">
       <strong>${item.item}</strong>: ${item.message}
     </li>
@@ -33,14 +33,16 @@ function renderResult(result, id = null) {
   resultCard.className = `result-card ${decisionClass(result.decision)}`;
   resultCard.innerHTML = `
     <div class="result-head">
-      <span class="decision ${decisionClass(result.decision)}">${result.decision.toUpperCase()}</span>
-      <span class="score">Trust Score: ${Number(result.trust_score).toFixed(3)}</span>
+      <span class="decision ${decisionClass(result.decision)}">${String(result.decision || "reject").toUpperCase()}</span>
+      <span class="score">Trust Score: ${Number(result.trust_score || 0).toFixed(3)}</span>
       ${id ? `<span class="saved-id">Saved ID: ${id}</span>` : ""}
     </div>
     <div class="meta">
       <div><strong>Fail-Closed:</strong> ${result.fail_closed ? "true" : "false"}</div>
-      <div><strong>Manifest SHA-256:</strong> <code>${result.manifest_sha256}</code></div>
-      <div><strong>Verified At:</strong> ${result.verified_at}</div>
+      <div><strong>Manifest SHA-256:</strong> <code>${result.manifest_sha256 || ""}</code></div>
+      <div><strong>Verified At:</strong> ${result.verified_at || ""}</div>
+      <div><strong>Upstream Source:</strong> ${result.upstream_source || "-"}</div>
+      <div><strong>Upstream Status:</strong> ${result.upstream_status || "-"}</div>
     </div>
     <ul class="reason-list">${reasonsHtml}</ul>
   `;
@@ -64,6 +66,10 @@ async function verifyAndSave() {
   if (!data.ok) {
     alert("検証に失敗しました。");
     return;
+  }
+
+  if (!data.upstream_ok && data.upstream_error) {
+    console.warn("Stage289 upstream error:", data.upstream_error);
   }
 
   renderResult(data.result, data.id);
@@ -128,6 +134,7 @@ async function loadHistory() {
       <div><strong>URL:</strong> ${escapeHtml(item.input_url)}</div>
       <div><strong>Time:</strong> ${item.created_at}</div>
       <div><strong>SHA-256:</strong> <code>${item.manifest_sha256}</code></div>
+      <div><strong>Upstream:</strong> ${item.upstream_source} / ${item.upstream_status}</div>
       <button type="button" onclick="loadDetail(${item.id})">詳細表示</button>
     </div>
   `).join("");
@@ -148,7 +155,7 @@ async function loadDetail(id) {
 }
 
 function escapeHtml(value) {
-  return value
+  return String(value || "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")

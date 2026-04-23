@@ -2,22 +2,30 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <title>Stage294 - Verification Export UI</title>
+  <title>Stage295 - Verification UI with Stage289 API Integration</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   <main class="container">
     <header class="hero">
-      <h1>Stage294</h1>
-      <p class="subtitle">Verification URL UI + Search / Filter + Export + SQLite Persistence</p>
+      <h1>Stage295</h1>
+      <p class="subtitle">Verification URL UI + Stage289 API Integration + Search / Filter + Export + SQLite Persistence</p>
       <div class="badges">
-        <span>Page Stage: 294</span>
-        <span>Storage: SQLite</span>
+        <span>Page Stage: 295</span>
+        <span>Integration: Stage289 API</span>
         <span>Export: CSV / JSON</span>
         <span>Fail-Closed: Enabled</span>
       </div>
     </header>
+
+    <section class="panel">
+      <h2>接続情報</h2>
+      <div class="info-box">
+        <div><strong>Stage289 Verify URL:</strong> <code>{{ stage289_verify_url }}</code></div>
+        <div><strong>動作:</strong> Stage295 は検証をローカル簡易判定せず、Stage289 API に委譲します。</div>
+      </div>
+    </section>
 
     <section class="panel">
       <h2>検証フォーム</h2>
@@ -40,7 +48,7 @@
 
       <div class="actions">
         <button id="sampleBtn" type="button">サンプル入力</button>
-        <button id="verifyBtn" type="button">検証して保存</button>
+        <button id="verifyBtn" type="button">Stage289 API で検証して保存</button>
       </div>
     </section>
 

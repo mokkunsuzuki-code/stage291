@@ -55,6 +55,15 @@ body {
   margin-top: 0;
 }
 
+.info-box {
+  border: 1px solid #334155;
+  border-radius: 14px;
+  padding: 16px;
+  background: #0f172a;
+  display: grid;
+  gap: 8px;
+}
+
 label {
   display: block;
   margin: 12px 0 6px;

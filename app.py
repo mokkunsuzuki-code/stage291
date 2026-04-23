@@ -5,7 +5,10 @@ import csv
 import hashlib
 import io
 import json
+import os
 import sqlite3
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -14,7 +17,10 @@ from flask import Flask, jsonify, render_template, request, Response
 
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"
-DB_PATH = DATA_DIR / "stage294.db"
+DB_PATH = DATA_DIR / "stage295.db"
+
+DEFAULT_STAGE289_VERIFY_URL = "http://127.0.0.1:2890/api/verify"
+STAGE289_VERIFY_URL = os.environ.get("STAGE289_VERIFY_URL", DEFAULT_STAGE289_VERIFY_URL)
 
 app = Flask(__name__)
 
@@ -42,7 +48,9 @@ def init_db() -> None:
         trust_score REAL NOT NULL,
         fail_closed INTEGER NOT NULL,
         reasons_json TEXT NOT NULL,
-        result_json TEXT NOT NULL
+        result_json TEXT NOT NULL,
+        upstream_source TEXT NOT NULL,
+        upstream_status TEXT NOT NULL
     );
 
     CREATE INDEX IF NOT EXISTS idx_verification_results_created_at
@@ -81,138 +89,156 @@ def normalize_bool(value: Any, default: bool = True) -> bool:
     return default
 
 
-def extract_fail_closed(manifest: dict[str, Any]) -> bool:
-    if "fail_closed" in manifest:
-        return normalize_bool(manifest["fail_closed"], True)
-
-    policy = manifest.get("verification_policy")
-    if isinstance(policy, dict) and "fail_closed" in policy:
-        return normalize_bool(policy["fail_closed"], True)
-
-    return True
+def normalize_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 
-def verify_payload(input_url: str, manifest_text: str) -> dict[str, Any]:
-    reasons: list[dict[str, Any]] = []
-    trust_score = 1.0
-    decision = "accept"
-    manifest: dict[str, Any] | None = None
+def normalize_reason_item(item: Any) -> dict[str, Any]:
+    if isinstance(item, dict):
+        return {
+            "item": str(item.get("item", "unknown")),
+            "ok": bool(item.get("ok", False)),
+            "message": str(item.get("message", "")),
+        }
 
-    input_url = input_url.strip()
-    manifest_text = manifest_text.strip()
-    manifest_digest = sha256_text(manifest_text)
+    return {
+        "item": "unknown",
+        "ok": False,
+        "message": str(item),
+    }
 
-    if not input_url:
-        reasons.append({
-            "item": "input_url",
-            "ok": False,
-            "message": "URL is empty."
-        })
-        trust_score -= 0.40
-    else:
-        url_ok = input_url.startswith("http://") or input_url.startswith("https://")
-        reasons.append({
-            "item": "input_url",
-            "ok": url_ok,
-            "message": "URL must start with http:// or https://." if not url_ok else "URL format is acceptable."
-        })
-        if not url_ok:
-            trust_score -= 0.25
 
-    if not manifest_text:
-        reasons.append({
-            "item": "manifest_text",
-            "ok": False,
-            "message": "Manifest JSON is empty."
-        })
-        trust_score -= 0.60
-        manifest = {}
-    else:
-        try:
-            parsed = json.loads(manifest_text)
-            if not isinstance(parsed, dict):
-                raise ValueError("Manifest root must be a JSON object.")
-            manifest = parsed
-            reasons.append({
-                "item": "manifest_json",
-                "ok": True,
-                "message": "Manifest JSON parsed successfully."
-            })
-        except Exception as exc:
-            manifest = {}
-            reasons.append({
-                "item": "manifest_json",
-                "ok": False,
-                "message": f"Manifest JSON parse failed: {exc}"
-            })
-            trust_score -= 0.60
+def normalize_stage289_result(payload: dict[str, Any], manifest_text: str) -> dict[str, Any]:
+    manifest_sha256 = str(payload.get("manifest_sha256", "")).strip() or sha256_text(manifest_text)
 
-    fail_closed = extract_fail_closed(manifest or {})
+    reasons_raw = payload.get("reasons", [])
+    if not isinstance(reasons_raw, list):
+        reasons_raw = []
 
-    manifest_url = None
-    for key in ("url", "target_url", "verification_url"):
-        value = (manifest or {}).get(key)
-        if isinstance(value, str) and value.strip():
-            manifest_url = value.strip()
-            break
+    normalized_reasons = [normalize_reason_item(item) for item in reasons_raw]
 
-    if manifest_url:
-        url_match = manifest_url == input_url
-        reasons.append({
-            "item": "manifest_url_match",
-            "ok": url_match,
-            "message": "Manifest URL matches input URL." if url_match else f"Manifest URL does not match input URL. manifest={manifest_url}"
-        })
-        if not url_match:
-            trust_score -= 0.20
-    else:
-        reasons.append({
-            "item": "manifest_url_match",
-            "ok": False,
-            "message": "Manifest does not contain url / target_url / verification_url."
-        })
-        trust_score -= 0.10
-
-    has_subject = isinstance((manifest or {}).get("subject"), dict) or isinstance((manifest or {}).get("subject"), str)
-    reasons.append({
-        "item": "subject",
-        "ok": has_subject,
-        "message": "subject exists." if has_subject else "subject is missing."
-    })
-    if not has_subject:
-        trust_score -= 0.10
-
-    evidence = (manifest or {}).get("evidence")
-    has_evidence = isinstance(evidence, list) and len(evidence) > 0
-    reasons.append({
-        "item": "evidence",
-        "ok": has_evidence,
-        "message": "evidence exists." if has_evidence else "evidence is missing or empty."
-    })
-    if not has_evidence:
-        trust_score -= 0.10
-
-    trust_score = max(0.0, min(1.0, round(trust_score, 3)))
-
-    any_hard_fail = any(not item["ok"] for item in reasons if item["item"] in {"manifest_json", "input_url"})
-    any_soft_fail = any(not item["ok"] for item in reasons)
-
-    if fail_closed and any_hard_fail:
+    decision = str(payload.get("decision", "reject")).strip().lower()
+    if decision not in {"accept", "pending", "reject"}:
         decision = "reject"
-    elif trust_score >= 0.95 and not any_soft_fail:
-        decision = "accept"
-    elif trust_score >= 0.60:
-        decision = "pending"
-    else:
-        decision = "reject"
+
+    trust_score = max(0.0, min(1.0, round(normalize_float(payload.get("trust_score", 0.0), 0.0), 3)))
+    fail_closed = normalize_bool(payload.get("fail_closed", True), True)
+    verified_at = str(payload.get("verified_at", "")).strip() or utc_now_iso()
 
     return {
         "decision": decision,
         "trust_score": trust_score,
         "fail_closed": fail_closed,
+        "reasons": normalized_reasons,
+        "manifest_sha256": manifest_sha256,
+        "verified_at": verified_at,
+        "upstream_source": "stage289",
+        "upstream_status": "ok",
+    }
+
+
+def call_stage289_verify(input_url: str, manifest_text: str) -> dict[str, Any]:
+    payload = {
+        "url": input_url,
+        "manifest": manifest_text,
+    }
+    request_body = json.dumps(payload).encode("utf-8")
+
+    req = urllib.request.Request(
+        STAGE289_VERIFY_URL,
+        data=request_body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw = resp.read().decode("utf-8")
+            status_code = resp.getcode()
+    except urllib.error.HTTPError as exc:
+        error_body = exc.read().decode("utf-8", errors="replace")
+        return {
+            "ok": False,
+            "error_type": "http_error",
+            "status_code": exc.code,
+            "message": f"Stage289 returned HTTP {exc.code}",
+            "body": error_body,
+        }
+    except urllib.error.URLError as exc:
+        return {
+            "ok": False,
+            "error_type": "url_error",
+            "status_code": None,
+            "message": f"Stage289 connection failed: {exc.reason}",
+            "body": "",
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "error_type": "unexpected_error",
+            "status_code": None,
+            "message": f"Stage289 call failed: {exc}",
+            "body": "",
+        }
+
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return {
+            "ok": False,
+            "error_type": "invalid_json",
+            "status_code": status_code,
+            "message": "Stage289 response was not valid JSON.",
+            "body": raw,
+        }
+
+    result_candidate = parsed.get("result", parsed)
+    if not isinstance(result_candidate, dict):
+        return {
+            "ok": False,
+            "error_type": "invalid_shape",
+            "status_code": status_code,
+            "message": "Stage289 response JSON shape was invalid.",
+            "body": raw,
+        }
+
+    normalized = normalize_stage289_result(result_candidate, manifest_text)
+    return {
+        "ok": True,
+        "status_code": status_code,
+        "result": normalized,
+        "raw_response": parsed,
+    }
+
+
+def build_fail_closed_error_result(manifest_text: str, message: str, body: str = "") -> dict[str, Any]:
+    reasons = [
+        {
+            "item": "stage289_connection",
+            "ok": False,
+            "message": message,
+        }
+    ]
+
+    if body.strip():
+        reasons.append({
+            "item": "stage289_response_body",
+            "ok": False,
+            "message": body[:500],
+        })
+
+    return {
+        "decision": "reject",
+        "trust_score": 0.0,
+        "fail_closed": True,
         "reasons": reasons,
-        "manifest_sha256": manifest_digest,
+        "manifest_sha256": sha256_text(manifest_text.strip()),
         "verified_at": utc_now_iso(),
+        "upstream_source": "stage289",
+        "upstream_status": "error",
     }
 
 
@@ -230,8 +256,10 @@ def save_result(input_url: str, manifest_text: str, result: dict[str, Any]) -> i
                 trust_score,
                 fail_closed,
                 reasons_json,
-                result_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                result_json,
+                upstream_source,
+                upstream_status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 result["verified_at"],
@@ -243,6 +271,8 @@ def save_result(input_url: str, manifest_text: str, result: dict[str, Any]) -> i
                 1 if result["fail_closed"] else 0,
                 json.dumps(result["reasons"], ensure_ascii=False, indent=2),
                 json.dumps(result, ensure_ascii=False, indent=2),
+                result.get("upstream_source", "unknown"),
+                result.get("upstream_status", "unknown"),
             ),
         )
         conn.commit()
@@ -298,7 +328,7 @@ def query_results(decision: str, url_query: str, min_score: float | None, limit:
         where_sql = "WHERE " + " AND ".join(where_clauses)
 
     query = f"""
-        SELECT id, created_at, input_url, manifest_sha256, decision, trust_score, fail_closed
+        SELECT id, created_at, input_url, manifest_sha256, decision, trust_score, fail_closed, upstream_source, upstream_status
         FROM verification_results
         {where_sql}
         ORDER BY id DESC
@@ -322,23 +352,27 @@ def query_results(decision: str, url_query: str, min_score: float | None, limit:
             "decision": row["decision"],
             "trust_score": row["trust_score"],
             "fail_closed": bool(row["fail_closed"]),
+            "upstream_source": row["upstream_source"],
+            "upstream_status": row["upstream_status"],
         })
     return items
 
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", stage289_verify_url=STAGE289_VERIFY_URL)
 
 
 @app.route("/api/health")
 def health():
     return jsonify({
         "ok": True,
-        "stage": 294,
+        "stage": 295,
         "storage": "sqlite",
+        "integration": "stage289",
         "export": ["json", "csv"],
         "db_path": str(DB_PATH.name),
+        "stage289_verify_url": STAGE289_VERIFY_URL,
     })
 
 
@@ -348,13 +382,29 @@ def api_verify():
     input_url = str(data.get("url", "")).strip()
     manifest_text = str(data.get("manifest", "")).strip()
 
-    result = verify_payload(input_url, manifest_text)
+    upstream = call_stage289_verify(input_url, manifest_text)
+
+    if upstream["ok"]:
+        result = upstream["result"]
+    else:
+        result = build_fail_closed_error_result(
+            manifest_text=manifest_text,
+            message=upstream["message"],
+            body=upstream.get("body", ""),
+        )
+
     row_id = save_result(input_url, manifest_text, result)
 
     return jsonify({
         "ok": True,
         "saved": True,
         "id": row_id,
+        "upstream_ok": upstream["ok"],
+        "upstream_error": None if upstream["ok"] else {
+            "type": upstream["error_type"],
+            "status_code": upstream["status_code"],
+            "message": upstream["message"],
+        },
         "result": result,
     })
 
@@ -406,6 +456,8 @@ def api_result_detail(result_id: int):
             "decision": row["decision"],
             "trust_score": row["trust_score"],
             "fail_closed": bool(row["fail_closed"]),
+            "upstream_source": row["upstream_source"],
+            "upstream_status": row["upstream_status"],
             "reasons": json.loads(row["reasons_json"]),
             "result": json.loads(row["result_json"]),
         }
@@ -419,7 +471,8 @@ def api_export_json():
 
     payload = {
         "exported_at": utc_now_iso(),
-        "stage": 294,
+        "stage": 295,
+        "integration": "stage289",
         "filters": {
             "decision": decision,
             "url_query": url_query,
@@ -430,13 +483,11 @@ def api_export_json():
         "items": items,
     }
 
-    filename = "stage294_export.json"
+    filename = "stage295_export.json"
     return Response(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         mimetype="application/json",
-        headers={
-            "Content-Disposition": f'attachment; filename="{filename}"'
-        },
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
@@ -455,6 +506,8 @@ def api_export_csv():
         "decision",
         "trust_score",
         "fail_closed",
+        "upstream_source",
+        "upstream_status",
     ])
 
     for item in items:
@@ -466,18 +519,18 @@ def api_export_csv():
             item["decision"],
             item["trust_score"],
             item["fail_closed"],
+            item["upstream_source"],
+            item["upstream_status"],
         ])
 
-    filename = "stage294_export.csv"
+    filename = "stage295_export.csv"
     return Response(
         output.getvalue(),
         mimetype="text/csv",
-        headers={
-            "Content-Disposition": f'attachment; filename="{filename}"'
-        },
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
 if __name__ == "__main__":
     init_db()
-    app.run(host="127.0.0.1", port=2940, debug=True)
+    app.run(host="127.0.0.1", port=2950, debug=True)

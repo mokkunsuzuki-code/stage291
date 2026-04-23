@@ -1,5 +1,1 @@
-fastapi
-uvicorn
-requests
-jinja2
-python-multipart
+Flask==3.0.3

@@ -1,0 +1,35 @@
+{
+  "api_error": null,
+  "api_result": {
+    "breakdown": {
+      "execution": 1.0,
+      "identity": 1.0,
+      "integrity": 1.0,
+      "time": 1.0
+    },
+    "decision": "accept",
+    "evidence": {
+      "manifest_present": true,
+      "manifest_sha256": "e307fadead5134d4f6ed52b14071903eba81beb3b7ae0d52538e40830d2391b0",
+      "url": "https://example.com",
+      "url_fetch_ok": true,
+      "url_sha256": "fb91d75a6bb430787a61b0aec5e374f580030f2878e1613eab5ca6310f7bbb9a"
+    },
+    "reason": "All major trust components are present.",
+    "signature": null,
+    "signature_error": "GPG signing failed: gpg: directory '/opt/render/.gnupg' created\ngpg: keybox '/opt/render/.gnupg/pubring.kbx' created\ngpg: no default secret key: No secret key\ngpg: /tmp/tmpmnq9u0b4/payload.json: clear-sign failed: No secret key",
+    "trust_score": 1.0
+  },
+  "manifest_text": "{\r\n  \"execution\": true,\r\n  \"identity\": true,\r\n  \"signer\": \"demo-signer\",\r\n  \"timestamp\": true,\r\n  \"workflow\": \"github-actions\"\r\n}",
+  "parse_error": null,
+  "parsed_manifest": {
+    "execution": true,
+    "identity": true,
+    "signer": "demo-signer",
+    "timestamp": true,
+    "workflow": "github-actions"
+  },
+  "url": "https://example.com",
+  "verification_id": "8rbp3HNs5y4",
+  "verified_at": "2026-04-23T10:55:35.048723+00:00"
+}

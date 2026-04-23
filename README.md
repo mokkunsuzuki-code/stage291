@@ -1,143 +1,132 @@
-# Stage291: Persistent Verification Result URL (JSON Storage)
+# Stage292: Verification URL UI + SQLite Persistence
 
 ## Overview
 
-Stage291 upgrades Stage290 by adding **JSON-based persistence** for verification results.
+Stage292 extends the Verification URL UI by adding **persistent storage using SQLite**.
 
-Users can:
-
-- Input URL + manifest
-- Get verification result (accept / pending / reject)
-- Receive trust score and breakdown
-- Generate a shareable verification URL
-- Store results as JSON for later retrieval
-
-This stage transforms:
-
-Verification UI → Persistent Verification Record
+This stage transforms verification from a one-time UI interaction into a **persistent verification log system**.
 
 ---
 
-## Key Features
+## Key Concept
 
-### 1. Human-Friendly Verification UI
-No terminal or JSON parsing required.
+Stage291:
+- Verification via browser UI
+- JSON-based output (ephemeral)
 
-### 2. Persistent Result Storage
-Each verification result is stored as:
-
-results/<verification_id>.json
-
-### 3. Shareable Verification URL
-
-Example:
-
-https://stage291.onrender.com/result/<verification_id>
+Stage292:
+- Verification via browser UI
+- **SQLite-based persistence**
+- Verification history tracking
+- Reproducible inspection
 
 ---
 
-### 4. Trust Model
+## What This Stage Proves
 
-The system evaluates:
-
-- Integrity
-- Execution
-- Identity
-- Time
-
-Final decision:
-
-- ACCEPT
-- PENDING
-- REJECT
-
----
-
-### 5. Fail-Closed Design
-
-If verification is incomplete:
-
-→ system does NOT accept  
-→ returns pending or reject
+- Verification results can be stored persistently
+- Each verification is reproducible and queryable
+- Fail-closed decisions are recorded with reasons
+- Both success and failure are auditable
 
 ---
 
 ## Architecture
 
-User (Browser)
+
+User Input (URL + Manifest)
 ↓
-Stage291 UI
+Verification Logic (fail-closed)
 ↓
-Stage289 API
+Decision + Trust Score
 ↓
-Result + Evidence
+SQLite Storage (stage292.db)
 ↓
-JSON storage
-↓
-Re-loadable verification page
+History / Detail View (UI)
+
 
 ---
 
-## Flow
+## Features
 
-1. Input URL + manifest
-2. POST to Stage289 API
-3. Receive decision + trust score
-4. Save JSON record
-5. Generate shareable URL
-6. Reload anytime via /result/<id>
-
----
-
-## Why This Matters
-
-Previous stages:
-
-- Stage289 → machine verification
-- Stage290 → human-friendly UI
-
-Stage291 adds:
-
-- persistence
-- reproducibility
-- shareable proof structure
-
-This is the transition from:
-
-verification experience → verification record
+- Verification UI (browser-based)
+- SQLite persistence (`data/stage292.db`)
+- History listing (latest first)
+- Detailed verification inspection
+- Fail-closed enforcement
+- Trust score calculation
 
 ---
 
-## Storage Model
+## Example Outcomes
 
-- JSON file per verification
-- Simple, transparent, inspectable
-- Easy to upgrade to DB later
+### ACCEPT (valid input)
+- trust_score: 1.000
+- decision: accept
 
----
-
-## Limitation (Important)
-
-Render free tier:
-
-- filesystem persistence is NOT guaranteed across redeploys
-
-Local environment:
-
-- persistence works reliably
+### REJECT (invalid / empty input)
+- trust_score: 0.000
+- decision: reject
 
 ---
 
-## Next Stage
+## API Endpoints
 
-Stage292:
+### Health Check
 
-- SQLite persistence
-- stronger durability
-- production-ready verification records
+GET /api/health
+
+
+### Verify and Save
+
+POST /api/verify
+
+
+### List Results
+
+GET /api/results
+
+
+### Result Detail
+
+GET /api/results/{id}
+
 
 ---
 
-## License
+## Local Run
 
-MIT License (2025)
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+
+pip install -r requirements.txt
+
+python tools/init_db.py
+python app.py
+
+Open:
+
+http://127.0.0.1:2920
+Storage
+
+SQLite file:
+
+data/stage292.db
+Important Design Principle
+
+This system is fail-closed:
+
+Invalid input → REJECT
+Missing data → REJECT
+No silent acceptance
+Evolution Path
+
+Stage290: UI (visualization layer)
+Stage291: JSON persistence
+Stage292: SQLite persistence (this stage)
+Stage293+: Query / filtering / analytics
+
+License
+
+MIT License

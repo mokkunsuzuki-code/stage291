@@ -1,0 +1,16 @@
+{
+  "api_error": "ReadTimeout: HTTPSConnectionPool(host='stage289.onrender.com', port=443): Read timed out. (read timeout=30)",
+  "api_result": null,
+  "manifest_text": "{\r\n  \"execution\": true,\r\n  \"identity\": true,\r\n  \"signer\": \"demo-signer\",\r\n  \"timestamp\": true,\r\n  \"workflow\": \"github-actions\"\r\n}",
+  "parse_error": null,
+  "parsed_manifest": {
+    "execution": true,
+    "identity": true,
+    "signer": "demo-signer",
+    "timestamp": true,
+    "workflow": "github-actions"
+  },
+  "url": "https://example.com",
+  "verification_id": "ff8dtcLgnDs",
+  "verified_at": "2026-04-23T10:54:56.882555+00:00"
+}

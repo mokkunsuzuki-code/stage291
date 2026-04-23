@@ -1,458 +1,60 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>Stage291 Persistent Verification URL UI</title>
+  <meta charset="utf-8">
+  <title>Stage292 - Verification URL UI (SQLite)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    :root {
-      --bg: #0b1020;
-      --panel: #121937;
-      --panel-2: #182144;
-      --card: #ffffff;
-      --muted: #6b7280;
-      --text: #111827;
-      --line: #e5e7eb;
-      --primary: #4f46e5;
-      --primary-2: #7c3aed;
-      --shadow: 0 16px 40px rgba(0, 0, 0, 0.12);
-      --radius: 18px;
-    }
-
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      color: var(--text);
-      background:
-        radial-gradient(circle at top left, rgba(124,58,237,0.18), transparent 28%),
-        radial-gradient(circle at top right, rgba(79,70,229,0.18), transparent 30%),
-        linear-gradient(180deg, #eef2ff 0%, #f8fafc 35%, #f3f4f6 100%);
-    }
-
-    .hero {
-      background: linear-gradient(135deg, var(--bg), var(--panel), var(--panel-2));
-      color: #fff;
-      padding: 54px 24px 96px;
-    }
-
-    .hero-inner {
-      max-width: 1160px;
-      margin: 0 auto;
-      display: grid;
-      grid-template-columns: 1.2fr 0.9fr;
-      gap: 24px;
-      align-items: start;
-    }
-
-    .stage-label {
-      display: inline-block;
-      padding: 8px 14px;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.12);
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      margin-bottom: 18px;
-    }
-
-    h1 {
-      margin: 0 0 16px;
-      font-size: 44px;
-      line-height: 1.08;
-    }
-
-    .hero p {
-      margin: 0;
-      color: rgba(255,255,255,0.88);
-      line-height: 1.8;
-      font-size: 16px;
-    }
-
-    .hero-card {
-      background: rgba(255,255,255,0.08);
-      border: 1px solid rgba(255,255,255,0.12);
-      border-radius: 20px;
-      padding: 22px;
-      backdrop-filter: blur(8px);
-      box-shadow: 0 16px 40px rgba(0,0,0,0.18);
-    }
-
-    .hero-card h2 {
-      margin: 0 0 14px;
-      font-size: 18px;
-    }
-
-    .hero-card ul {
-      margin: 0;
-      padding-left: 18px;
-      color: rgba(255,255,255,0.9);
-      line-height: 1.8;
-      font-size: 14px;
-    }
-
-    .wrap {
-      max-width: 1160px;
-      margin: -56px auto 40px;
-      padding: 0 24px;
-    }
-
-    .summary-grid {
-      display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-
-    .summary-card, .card {
-      background: #fff;
-      border-radius: 18px;
-      box-shadow: var(--shadow);
-      border: 1px solid rgba(229,231,235,0.9);
-      padding: 18px 24px;
-    }
-
-    .summary-label {
-      color: var(--muted);
-      font-size: 13px;
-      margin-bottom: 8px;
-    }
-
-    .summary-value {
-      font-size: 24px;
-      font-weight: 800;
-      color: #111827;
-    }
-
-    .main-grid {
-      display: grid;
-      grid-template-columns: 1.35fr 0.95fr;
-      gap: 24px;
-      align-items: start;
-    }
-
-    .card h2 {
-      margin: 0 0 12px;
-      font-size: 24px;
-    }
-
-    .muted {
-      color: var(--muted);
-      line-height: 1.7;
-      font-size: 14px;
-    }
-
-    label {
-      display: block;
-      font-size: 14px;
-      font-weight: 700;
-      margin: 16px 0 8px;
-    }
-
-    input[type="text"], textarea {
-      width: 100%;
-      border: 1px solid #d1d5db;
-      border-radius: 14px;
-      padding: 14px 16px;
-      font-size: 14px;
-      background: #fff;
-    }
-
-    textarea {
-      min-height: 260px;
-      resize: vertical;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      line-height: 1.55;
-    }
-
-    .sample-buttons {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      margin-top: 14px;
-    }
-
-    .sample-button {
-      border: 1px solid #d1d5db;
-      background: #fff;
-      color: #111827;
-      border-radius: 999px;
-      padding: 10px 14px;
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-    }
-
-    .button-row {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      margin-top: 18px;
-      flex-wrap: wrap;
-    }
-
-    button.submit-button {
-      background: linear-gradient(135deg, var(--primary), var(--primary-2));
-      color: white;
-      border: none;
-      border-radius: 14px;
-      padding: 14px 22px;
-      font-size: 15px;
-      font-weight: 700;
-      cursor: pointer;
-    }
-
-    .button-note {
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .demo-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 14px;
-      margin-top: 16px;
-    }
-
-    .demo-card {
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      padding: 16px;
-      background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-    }
-
-    .demo-title {
-      font-size: 13px;
-      color: var(--muted);
-      margin-bottom: 8px;
-    }
-
-    .demo-value {
-      font-size: 24px;
-      font-weight: 800;
-    }
-
-    .flow {
-      display: grid;
-      gap: 12px;
-      margin-top: 18px;
-    }
-
-    .flow-step {
-      border-left: 4px solid #6366f1;
-      background: #f8fafc;
-      border-radius: 0 14px 14px 0;
-      padding: 12px 14px;
-      font-size: 14px;
-    }
-
-    .code {
-      background: #0f172a;
-      color: #e5e7eb;
-      border-radius: 14px;
-      padding: 16px;
-      overflow-x: auto;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 13px;
-      line-height: 1.6;
-    }
-
-    .feature-list {
-      display: grid;
-      gap: 14px;
-      margin-top: 16px;
-    }
-
-    .feature {
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      padding: 16px;
-      background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-    }
-
-    .feature-title {
-      font-size: 15px;
-      font-weight: 800;
-      margin-bottom: 6px;
-    }
-
-    @media (max-width: 980px) {
-      .hero-inner, .main-grid {
-        grid-template-columns: 1fr;
-      }
-      .summary-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-      h1 {
-        font-size: 34px;
-      }
-      .wrap {
-        margin-top: -40px;
-      }
-    }
-
-    @media (max-width: 640px) {
-      .summary-grid, .demo-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-  </style>
+  <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <section class="hero">
-    <div class="hero-inner">
-      <div>
-        <div class="stage-label">Stage {{ stage }}</div>
-        <h1>Persistent Verification URL UI</h1>
-        <p>
-          Stage289 の Verification API を、人が見て判断しやすく、さらに結果を JSON として保存できる
-          検証URL画面にしたものです。URL と manifest を入力すると、判定・信頼スコア・内訳を確認できます。
-        </p>
+  <main class="container">
+    <header class="hero">
+      <h1>Stage292</h1>
+      <p class="subtitle">Verification URL UI + SQLite Persistence</p>
+      <div class="badges">
+        <span>Page Stage: 292</span>
+        <span>Storage: SQLite</span>
+        <span>Fail-Closed: Enabled</span>
       </div>
+    </header>
 
-      <div class="hero-card">
-        <h2>この画面の役割</h2>
-        <ul>
-          <li>検証ロジックそのものは Stage289 API が担当</li>
-          <li>Stage291 は「見せる＋保存する層」として結果を整理</li>
-          <li>ターミナルを使わずに検証できる</li>
-          <li>結果は JSON として保存され、再表示しやすい</li>
-        </ul>
-      </div>
-    </div>
-  </section>
+    <section class="panel">
+      <h2>検証フォーム</h2>
+      <label for="url">URL</label>
+      <input id="url" type="text" value="https://example.com/verify">
 
-  <main class="wrap">
-    <section class="summary-grid">
-      <div class="summary-card">
-        <div class="summary-label">ページステージ</div>
-        <div class="summary-value">Stage 291</div>
-      </div>
-      <div class="summary-card">
-        <div class="summary-label">APIステージ</div>
-        <div class="summary-value">Stage 289</div>
-      </div>
-      <div class="summary-card">
-        <div class="summary-label">保存方式</div>
-        <div class="summary-value">JSON</div>
-      </div>
-      <div class="summary-card">
-        <div class="summary-label">想定スコア</div>
-        <div class="summary-value">1.0</div>
-      </div>
-      <div class="summary-card">
-        <div class="summary-label">Fail-Closed</div>
-        <div class="summary-value">有効</div>
+      <label for="manifest">manifest JSON</label>
+      <textarea id="manifest" rows="16">{
+  "url": "https://example.com/verify",
+  "subject": {
+    "name": "sample"
+  },
+  "evidence": [
+    {"type": "sha256", "ok": true}
+  ],
+  "verification_policy": {
+    "fail_closed": true
+  }
+}</textarea>
+
+      <div class="actions">
+        <button id="sampleBtn" type="button">サンプル入力</button>
+        <button id="verifyBtn" type="button">検証してSQLiteに保存</button>
       </div>
     </section>
 
-    <section class="main-grid">
-      <section class="card">
-        <h2>検証フォーム</h2>
-        <p class="muted">
-          URL と manifest JSON を入力して検証を実行します。
-          下のサンプルボタンで accept / pending / reject の例をすぐ試せます。
-        </p>
-
-        <form method="post" action="/verify-ui" id="verify-form">
-          <label for="url">検証対象URL</label>
-          <input id="url" name="url" type="text" value="{{ sample_url }}" required>
-
-          <div class="sample-buttons">
-            <button type="button" class="sample-button" onclick="setAcceptSample()">Accept サンプル</button>
-            <button type="button" class="sample-button" onclick="setPendingSample()">Pending サンプル</button>
-            <button type="button" class="sample-button" onclick="setRejectSample()">Reject サンプル</button>
-          </div>
-
-          <label for="manifest_text">manifest JSON</label>
-          <textarea id="manifest_text" name="manifest_text" required>{{ sample_manifest }}</textarea>
-
-          <div class="button-row">
-            <button class="submit-button" type="submit">検証する</button>
-            <div class="button-note">Stage289 API を裏で呼び出し、結果を JSON 保存します</div>
-          </div>
-        </form>
-      </section>
-
-      <aside class="card">
-        <h2>検証の見え方</h2>
-        <div class="demo-grid">
-          <div class="demo-card">
-            <div class="demo-title">Accept</div>
-            <div class="demo-value">信頼材料が十分</div>
-          </div>
-          <div class="demo-card">
-            <div class="demo-title">Pending</div>
-            <div class="demo-value">一部不足</div>
-          </div>
-          <div class="demo-card">
-            <div class="demo-title">Reject</div>
-            <div class="demo-value">材料不足</div>
-          </div>
-          <div class="demo-card">
-            <div class="demo-title">保存</div>
-            <div class="demo-value">results/*.json</div>
-          </div>
-        </div>
-
-        <div class="flow">
-          <div class="flow-step">1. URL と manifest を入力</div>
-          <div class="flow-step">2. Stage289 API に POST /verify</div>
-          <div class="flow-step">3. 結果を JSON に保存</div>
-          <div class="flow-step">4. 結果ページを再表示可能にする</div>
-        </div>
-      </aside>
+    <section class="panel">
+      <h2>最新結果</h2>
+      <div id="resultCard" class="result-card empty">まだ検証結果はありません。</div>
     </section>
 
-    <section class="card" style="margin-top: 24px;">
-      <h2>この画面がやっていること</h2>
-      <div class="code">入力フォーム → Stage289 API → 判定結果 → results/*.json に保存</div>
-    </section>
-
-    <section class="card" style="margin-top: 24px;">
-      <h2>製品としての意味</h2>
-      <div class="feature-list">
-        <div class="feature">
-          <div class="feature-title">API を人が使える形に変える</div>
-          <div class="muted">curl や JSON を直接見なくても、検証結果を画面で理解できます。</div>
-        </div>
-        <div class="feature">
-          <div class="feature-title">共有体験を“保存”へ進める</div>
-          <div class="muted">結果ページだけでなく、検証結果そのものを JSON として保存します。</div>
-        </div>
-        <div class="feature">
-          <div class="feature-title">本物の証明URLに近づく</div>
-          <div class="muted">再起動後もローカルで結果を再表示できる構造になります。</div>
-        </div>
-      </div>
+    <section class="panel">
+      <h2>保存履歴</h2>
+      <button id="refreshBtn" type="button">履歴を更新</button>
+      <div id="history" class="history"></div>
     </section>
   </main>
 
-  <script>
-    function setManifest(obj) {
-      document.getElementById("manifest_text").value = JSON.stringify(obj, null, 2);
-    }
-
-    function setAcceptSample() {
-      setManifest({
-        execution: true,
-        identity: true,
-        signer: "demo-signer",
-        timestamp: true,
-        workflow: "github-actions"
-      });
-    }
-
-    function setPendingSample() {
-      setManifest({
-        execution: true
-      });
-    }
-
-    function setRejectSample() {
-      setManifest({});
-    }
-  </script>
+  <script src="/static/app.js"></script>
 </body>
 </html>

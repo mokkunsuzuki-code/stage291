@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import secrets
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import requests
@@ -11,19 +12,19 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 STAGE289_API = "https://stage289.onrender.com/verify"
+RESULTS_DIR = Path("results")
 
 app = FastAPI(
-    title="Stage290 Verification URL UI",
-    description="Human-friendly verification URL UI for Stage289 Verification API.",
-    version="290.2.0",
+    title="Stage291 Persistent Verification URL UI",
+    description="Verification URL UI with JSON persistence on top of Stage289 Verification API.",
+    version="291.0.0",
 )
 
 templates = Jinja2Templates(directory="templates")
 
-# 簡易メモリ保存
-# Render free環境では永続化されない可能性がありますが、
-# まずは共有URLの体験を作るための最小実装です。
-RESULT_STORE: dict[str, dict[str, Any]] = {}
+
+def ensure_results_dir() -> None:
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def pretty_json(value: Any) -> str:
@@ -36,6 +37,66 @@ def now_iso_utc() -> str:
 
 def build_share_url(request: Request, verification_id: str) -> str:
     return str(request.url_for("result_by_id", verification_id=verification_id))
+
+
+def result_path_for(verification_id: str) -> Path:
+    return RESULTS_DIR / f"{verification_id}.json"
+
+
+def save_result_record(verification_id: str, record: dict[str, Any]) -> None:
+    ensure_results_dir()
+    path = result_path_for(verification_id)
+    path.write_text(
+        json.dumps(record, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def load_result_record(verification_id: str) -> dict[str, Any] | None:
+    path = result_path_for(verification_id)
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def render_result_page(
+    request: Request,
+    verification_id: str | None,
+    verified_at: str | None,
+    share_url: str | None,
+    url: str | None,
+    manifest_text: str | None,
+    parsed_manifest: dict[str, Any] | None,
+    parse_error: str | None,
+    api_result: dict[str, Any] | None,
+    api_error: str | None,
+    status_code: int = 200,
+) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request,
+        "result.html",
+        {
+            "verification_id": verification_id,
+            "verified_at": verified_at,
+            "share_url": share_url,
+            "url": url,
+            "manifest_text": manifest_text,
+            "parsed_manifest": parsed_manifest,
+            "parse_error": parse_error,
+            "api_result": api_result,
+            "api_error": api_error,
+            "api_result_pretty": pretty_json(api_result) if api_result is not None else None,
+        },
+        status_code=status_code,
+    )
+
+
+@app.on_event("startup")
+def startup_event() -> None:
+    ensure_results_dir()
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -51,7 +112,7 @@ def index(request: Request) -> HTMLResponse:
         request,
         "index.html",
         {
-            "stage": "290",
+            "stage": "291",
             "sample_url": "https://example.com",
             "sample_manifest": pretty_json(sample_manifest),
         },
@@ -61,50 +122,43 @@ def index(request: Request) -> HTMLResponse:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {
-        "stage": "290",
-        "name": "Verification URL UI",
+        "stage": "291",
+        "name": "Persistent Verification URL UI",
         "status": "ok",
     }
 
 
 @app.get("/result/{verification_id}", response_class=HTMLResponse, name="result_by_id")
 def result_by_id(request: Request, verification_id: str) -> HTMLResponse:
-    stored = RESULT_STORE.get(verification_id)
+    stored = load_result_record(verification_id)
 
     if stored is None:
-        return templates.TemplateResponse(
-            request,
-            "result.html",
-            {
-                "verification_id": verification_id,
-                "verified_at": None,
-                "share_url": None,
-                "url": None,
-                "manifest_text": None,
-                "parsed_manifest": None,
-                "parse_error": None,
-                "api_result": None,
-                "api_error": f"Verification result '{verification_id}' was not found.",
-                "api_result_pretty": None,
-            },
+        return render_result_page(
+            request=request,
+            verification_id=verification_id,
+            verified_at=None,
+            share_url=None,
+            url=None,
+            manifest_text=None,
+            parsed_manifest=None,
+            parse_error=None,
+            api_result=None,
+            api_error=f"Verification result '{verification_id}' was not found.",
             status_code=404,
         )
 
-    return templates.TemplateResponse(
-        request,
-        "result.html",
-        {
-            "verification_id": verification_id,
-            "verified_at": stored["verified_at"],
-            "share_url": build_share_url(request, verification_id),
-            "url": stored["url"],
-            "manifest_text": stored["manifest_text"],
-            "parsed_manifest": stored["parsed_manifest"],
-            "parse_error": stored["parse_error"],
-            "api_result": stored["api_result"],
-            "api_error": stored["api_error"],
-            "api_result_pretty": pretty_json(stored["api_result"]) if stored["api_result"] is not None else None,
-        },
+    return render_result_page(
+        request=request,
+        verification_id=verification_id,
+        verified_at=stored.get("verified_at"),
+        share_url=build_share_url(request, verification_id),
+        url=stored.get("url"),
+        manifest_text=stored.get("manifest_text"),
+        parsed_manifest=stored.get("parsed_manifest"),
+        parse_error=stored.get("parse_error"),
+        api_result=stored.get("api_result"),
+        api_error=stored.get("api_error"),
+        status_code=200,
     )
 
 
@@ -142,7 +196,8 @@ def verify_ui(
         except Exception as exc:
             api_error = f"{type(exc).__name__}: {exc}"
 
-    RESULT_STORE[verification_id] = {
+    record = {
+        "verification_id": verification_id,
         "verified_at": verified_at,
         "url": url,
         "manifest_text": manifest_text,
@@ -151,20 +206,18 @@ def verify_ui(
         "api_result": api_result,
         "api_error": api_error,
     }
+    save_result_record(verification_id, record)
 
-    return templates.TemplateResponse(
-        request,
-        "result.html",
-        {
-            "verification_id": verification_id,
-            "verified_at": verified_at,
-            "share_url": build_share_url(request, verification_id),
-            "url": url,
-            "manifest_text": manifest_text,
-            "parsed_manifest": parsed_manifest,
-            "parse_error": parse_error,
-            "api_result": api_result,
-            "api_error": api_error,
-            "api_result_pretty": pretty_json(api_result) if api_result is not None else None,
-        },
+    return render_result_page(
+        request=request,
+        verification_id=verification_id,
+        verified_at=verified_at,
+        share_url=build_share_url(request, verification_id),
+        url=url,
+        manifest_text=manifest_text,
+        parsed_manifest=parsed_manifest,
+        parse_error=parse_error,
+        api_result=api_result,
+        api_error=api_error,
+        status_code=200,
     )

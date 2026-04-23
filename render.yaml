@@ -1,8 +1,8 @@
 services:
   - type: web
-    name: stage290
+    name: stage291
     runtime: python
-    repo: https://github.com/mokkunsuzuki-code/stage290
+    repo: https://github.com/mokkunsuzuki-code/stage291
     branch: main
     buildCommand: "pip install -r requirements.txt"
     startCommand: "uvicorn app.main:app --host 0.0.0.0 --port 10000"

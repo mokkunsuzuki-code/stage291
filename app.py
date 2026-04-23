@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import csv
 import hashlib
+import io
 import json
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, Response
 
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"
-DB_PATH = DATA_DIR / "stage293.db"
+DB_PATH = DATA_DIR / "stage294.db"
 
 app = Flask(__name__)
 
@@ -249,6 +251,81 @@ def save_result(input_url: str, manifest_text: str, result: dict[str, Any]) -> i
         conn.close()
 
 
+def parse_filters(args) -> tuple[str, str, float | None, int]:
+    limit_raw = args.get("limit", "20")
+    decision = args.get("decision", "").strip().lower()
+    url_query = args.get("url_query", "").strip()
+    min_score_raw = args.get("min_score", "").strip()
+
+    try:
+        limit = max(1, min(1000, int(limit_raw)))
+    except ValueError:
+        limit = 20
+
+    allowed_decisions = {"accept", "pending", "reject"}
+    if decision not in allowed_decisions:
+        decision = ""
+
+    min_score = None
+    if min_score_raw:
+        try:
+            parsed = float(min_score_raw)
+            min_score = max(0.0, min(1.0, parsed))
+        except ValueError:
+            min_score = None
+
+    return decision, url_query, min_score, limit
+
+
+def query_results(decision: str, url_query: str, min_score: float | None, limit: int) -> list[dict[str, Any]]:
+    where_clauses = []
+    params: list[Any] = []
+
+    if decision:
+        where_clauses.append("decision = ?")
+        params.append(decision)
+
+    if url_query:
+        where_clauses.append("input_url LIKE ?")
+        params.append(f"%{url_query}%")
+
+    if min_score is not None:
+        where_clauses.append("trust_score >= ?")
+        params.append(min_score)
+
+    where_sql = ""
+    if where_clauses:
+        where_sql = "WHERE " + " AND ".join(where_clauses)
+
+    query = f"""
+        SELECT id, created_at, input_url, manifest_sha256, decision, trust_score, fail_closed
+        FROM verification_results
+        {where_sql}
+        ORDER BY id DESC
+        LIMIT ?
+    """
+    params.append(limit)
+
+    conn = get_db()
+    try:
+        rows = conn.execute(query, params).fetchall()
+    finally:
+        conn.close()
+
+    items = []
+    for row in rows:
+        items.append({
+            "id": row["id"],
+            "created_at": row["created_at"],
+            "input_url": row["input_url"],
+            "manifest_sha256": row["manifest_sha256"],
+            "decision": row["decision"],
+            "trust_score": row["trust_score"],
+            "fail_closed": bool(row["fail_closed"]),
+        })
+    return items
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -258,8 +335,9 @@ def index():
 def health():
     return jsonify({
         "ok": True,
-        "stage": 293,
+        "stage": 294,
         "storage": "sqlite",
+        "export": ["json", "csv"],
         "db_path": str(DB_PATH.name),
     })
 
@@ -283,73 +361,8 @@ def api_verify():
 
 @app.route("/api/results", methods=["GET"])
 def api_results():
-    limit_raw = request.args.get("limit", "20")
-    decision = request.args.get("decision", "").strip().lower()
-    url_query = request.args.get("url_query", "").strip()
-    min_score_raw = request.args.get("min_score", "").strip()
-
-    try:
-        limit = max(1, min(100, int(limit_raw)))
-    except ValueError:
-        limit = 20
-
-    allowed_decisions = {"accept", "pending", "reject"}
-    if decision not in allowed_decisions:
-        decision = ""
-
-    min_score = None
-    if min_score_raw:
-        try:
-            parsed = float(min_score_raw)
-            min_score = max(0.0, min(1.0, parsed))
-        except ValueError:
-            min_score = None
-
-    where_clauses = []
-    params: list[Any] = []
-
-    if decision:
-        where_clauses.append("decision = ?")
-        params.append(decision)
-
-    if url_query:
-        where_clauses.append("input_url LIKE ?")
-        params.append(f"%{url_query}%")
-
-    if min_score is not None:
-        where_clauses.append("trust_score >= ?")
-        params.append(min_score)
-
-    where_sql = ""
-    if where_clauses:
-        where_sql = "WHERE " + " AND ".join(where_clauses)
-
-    query = f"""
-        SELECT id, created_at, input_url, decision, trust_score, fail_closed, manifest_sha256
-        FROM verification_results
-        {where_sql}
-        ORDER BY id DESC
-        LIMIT ?
-    """
-    params.append(limit)
-
-    conn = get_db()
-    try:
-        rows = conn.execute(query, params).fetchall()
-    finally:
-        conn.close()
-
-    items = []
-    for row in rows:
-        items.append({
-            "id": row["id"],
-            "created_at": row["created_at"],
-            "input_url": row["input_url"],
-            "decision": row["decision"],
-            "trust_score": row["trust_score"],
-            "fail_closed": bool(row["fail_closed"]),
-            "manifest_sha256": row["manifest_sha256"],
-        })
+    decision, url_query, min_score, limit = parse_filters(request.args)
+    items = query_results(decision, url_query, min_score, limit)
 
     return jsonify({
         "ok": True,
@@ -399,6 +412,72 @@ def api_result_detail(result_id: int):
     })
 
 
+@app.route("/api/export/json", methods=["GET"])
+def api_export_json():
+    decision, url_query, min_score, limit = parse_filters(request.args)
+    items = query_results(decision, url_query, min_score, limit)
+
+    payload = {
+        "exported_at": utc_now_iso(),
+        "stage": 294,
+        "filters": {
+            "decision": decision,
+            "url_query": url_query,
+            "min_score": min_score,
+            "limit": limit,
+        },
+        "count": len(items),
+        "items": items,
+    }
+
+    filename = "stage294_export.json"
+    return Response(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        mimetype="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        },
+    )
+
+
+@app.route("/api/export/csv", methods=["GET"])
+def api_export_csv():
+    decision, url_query, min_score, limit = parse_filters(request.args)
+    items = query_results(decision, url_query, min_score, limit)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "id",
+        "created_at",
+        "input_url",
+        "manifest_sha256",
+        "decision",
+        "trust_score",
+        "fail_closed",
+    ])
+
+    for item in items:
+        writer.writerow([
+            item["id"],
+            item["created_at"],
+            item["input_url"],
+            item["manifest_sha256"],
+            item["decision"],
+            item["trust_score"],
+            item["fail_closed"],
+        ])
+
+    filename = "stage294_export.csv"
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        },
+    )
+
+
 if __name__ == "__main__":
     init_db()
-    app.run(host="127.0.0.1", port=2930, debug=True)
+    app.run(host="127.0.0.1", port=2940, debug=True)

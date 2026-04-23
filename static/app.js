@@ -10,6 +10,9 @@ const limitInput = document.getElementById("limit");
 const searchBtn = document.getElementById("searchBtn");
 const clearBtn = document.getElementById("clearBtn");
 
+const exportJsonLink = document.getElementById("exportJsonLink");
+const exportCsvLink = document.getElementById("exportCsvLink");
+
 const resultCard = document.getElementById("resultCard");
 const historyMeta = document.getElementById("historyMeta");
 const historyBox = document.getElementById("history");
@@ -88,8 +91,16 @@ function buildQueryString() {
   return params.toString();
 }
 
+function updateExportLinks() {
+  const query = buildQueryString();
+  exportJsonLink.href = `/api/export/json?${query}`;
+  exportCsvLink.href = `/api/export/csv?${query}`;
+}
+
 async function loadHistory() {
   const query = buildQueryString();
+  updateExportLinks();
+
   const res = await fetch(`/api/results?${query}`);
   const data = await res.json();
 
@@ -168,6 +179,7 @@ function clearFilters() {
   urlQueryInput.value = "";
   minScoreInput.value = "";
   limitInput.value = "20";
+  updateExportLinks();
   loadHistory();
 }
 
@@ -176,4 +188,10 @@ sampleBtn.addEventListener("click", loadSample);
 searchBtn.addEventListener("click", loadHistory);
 clearBtn.addEventListener("click", clearFilters);
 
+decisionFilter.addEventListener("change", updateExportLinks);
+urlQueryInput.addEventListener("input", updateExportLinks);
+minScoreInput.addEventListener("input", updateExportLinks);
+limitInput.addEventListener("input", updateExportLinks);
+
+updateExportLinks();
 loadHistory();

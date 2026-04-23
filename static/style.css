@@ -85,7 +85,8 @@ textarea {
   flex-wrap: wrap;
 }
 
-button {
+button,
+.export-actions a {
   border: none;
   border-radius: 12px;
   padding: 10px 16px;
@@ -93,9 +94,12 @@ button {
   cursor: pointer;
   background: #2563eb;
   color: white;
+  text-decoration: none;
+  display: inline-block;
 }
 
-button:hover {
+button:hover,
+.export-actions a:hover {
   opacity: 0.92;
 }
 

@@ -2,19 +2,19 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <title>Stage293 - Verification Search & Filter UI</title>
+  <title>Stage294 - Verification Export UI</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   <main class="container">
     <header class="hero">
-      <h1>Stage293</h1>
-      <p class="subtitle">Verification URL UI + Search / Filter + SQLite Persistence</p>
+      <h1>Stage294</h1>
+      <p class="subtitle">Verification URL UI + Search / Filter + Export + SQLite Persistence</p>
       <div class="badges">
-        <span>Page Stage: 293</span>
+        <span>Page Stage: 294</span>
         <span>Storage: SQLite</span>
-        <span>Search: Enabled</span>
+        <span>Export: CSV / JSON</span>
         <span>Fail-Closed: Enabled</span>
       </div>
     </header>
@@ -62,11 +62,16 @@
       <input id="minScore" type="number" min="0" max="1" step="0.001" placeholder="0.600">
 
       <label for="limit">表示件数</label>
-      <input id="limit" type="number" min="1" max="100" step="1" value="20">
+      <input id="limit" type="number" min="1" max="1000" step="1" value="20">
 
       <div class="actions">
         <button id="searchBtn" type="button">検索実行</button>
         <button id="clearBtn" type="button">条件クリア</button>
+      </div>
+
+      <div class="actions export-actions">
+        <a id="exportJsonLink" href="/api/export/json?limit=20" target="_blank">JSONエクスポート</a>
+        <a id="exportCsvLink" href="/api/export/csv?limit=20" target="_blank">CSVエクスポート</a>
       </div>
     </section>
 

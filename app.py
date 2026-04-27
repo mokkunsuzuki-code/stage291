@@ -17,7 +17,7 @@ from flask import Flask, jsonify, render_template, request, Response
 
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"
-DB_PATH = DATA_DIR / "stage295.db"
+DB_PATH = DATA_DIR / "stage296.db"
 
 DEFAULT_STAGE289_VERIFY_URL = "http://127.0.0.1:2890/api/verify"
 STAGE289_VERIFY_URL = os.environ.get("STAGE289_VERIFY_URL", DEFAULT_STAGE289_VERIFY_URL)
@@ -64,6 +64,9 @@ def init_db() -> None:
 
     CREATE INDEX IF NOT EXISTS idx_verification_results_trust_score
     ON verification_results(trust_score);
+
+    CREATE INDEX IF NOT EXISTS idx_verification_results_upstream_status
+    ON verification_results(upstream_status);
     """
     conn = get_db()
     try:
@@ -103,7 +106,6 @@ def normalize_reason_item(item: Any) -> dict[str, Any]:
             "ok": bool(item.get("ok", False)),
             "message": str(item.get("message", "")),
         }
-
     return {
         "item": "unknown",
         "ok": False,
@@ -358,6 +360,98 @@ def query_results(decision: str, url_query: str, min_score: float | None, limit:
     return items
 
 
+def query_dashboard_summary() -> dict[str, Any]:
+    conn = get_db()
+    try:
+        total = conn.execute("SELECT COUNT(*) AS c FROM verification_results").fetchone()["c"]
+
+        by_decision_rows = conn.execute(
+            """
+            SELECT decision, COUNT(*) AS c
+            FROM verification_results
+            GROUP BY decision
+            """
+        ).fetchall()
+
+        by_upstream_rows = conn.execute(
+            """
+            SELECT upstream_status, COUNT(*) AS c
+            FROM verification_results
+            GROUP BY upstream_status
+            """
+        ).fetchall()
+
+        trust_rows = conn.execute(
+            """
+            SELECT trust_score
+            FROM verification_results
+            """
+        ).fetchall()
+    finally:
+        conn.close()
+
+    by_decision = {"accept": 0, "pending": 0, "reject": 0}
+    for row in by_decision_rows:
+        key = row["decision"]
+        if key in by_decision:
+            by_decision[key] = row["c"]
+
+    by_upstream = {"ok": 0, "error": 0, "unknown": 0}
+    for row in by_upstream_rows:
+        key = row["upstream_status"]
+        if key in by_upstream:
+            by_upstream[key] = row["c"]
+
+    scores = [float(row["trust_score"]) for row in trust_rows]
+
+    def pct(value: int) -> float:
+        if total == 0:
+            return 0.0
+        return round((value / total) * 100.0, 1)
+
+    distribution = {
+        "0.0-0.2": 0,
+        "0.2-0.4": 0,
+        "0.4-0.6": 0,
+        "0.6-0.8": 0,
+        "0.8-1.0": 0,
+    }
+    for score in scores:
+        if score < 0.2:
+            distribution["0.0-0.2"] += 1
+        elif score < 0.4:
+            distribution["0.2-0.4"] += 1
+        elif score < 0.6:
+            distribution["0.4-0.6"] += 1
+        elif score < 0.8:
+            distribution["0.6-0.8"] += 1
+        else:
+            distribution["0.8-1.0"] += 1
+
+    avg_score = round(sum(scores) / len(scores), 3) if scores else 0.0
+
+    return {
+        "total_results": total,
+        "decision_counts": by_decision,
+        "decision_rates": {
+            "accept_rate": pct(by_decision["accept"]),
+            "pending_rate": pct(by_decision["pending"]),
+            "reject_rate": pct(by_decision["reject"]),
+        },
+        "upstream_counts": by_upstream,
+        "upstream_rates": {
+            "upstream_ok_rate": pct(by_upstream["ok"]),
+            "upstream_error_rate": pct(by_upstream["error"]),
+            "upstream_unknown_rate": pct(by_upstream["unknown"]),
+        },
+        "trust_score": {
+            "average": avg_score,
+            "distribution": distribution,
+        },
+        "generated_at": utc_now_iso(),
+    }
+
+
 @app.route("/")
 def index():
     return render_template("index.html", stage289_verify_url=STAGE289_VERIFY_URL)
@@ -367,9 +461,10 @@ def index():
 def health():
     return jsonify({
         "ok": True,
-        "stage": 295,
+        "stage": 296,
         "storage": "sqlite",
         "integration": "stage289",
+        "dashboard": True,
         "export": ["json", "csv"],
         "db_path": str(DB_PATH.name),
         "stage289_verify_url": STAGE289_VERIFY_URL,
@@ -471,7 +566,7 @@ def api_export_json():
 
     payload = {
         "exported_at": utc_now_iso(),
-        "stage": 295,
+        "stage": 296,
         "integration": "stage289",
         "filters": {
             "decision": decision,
@@ -483,7 +578,7 @@ def api_export_json():
         "items": items,
     }
 
-    filename = "stage295_export.json"
+    filename = "stage296_export.json"
     return Response(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         mimetype="application/json",
@@ -523,7 +618,7 @@ def api_export_csv():
             item["upstream_status"],
         ])
 
-    filename = "stage295_export.csv"
+    filename = "stage296_export.csv"
     return Response(
         output.getvalue(),
         mimetype="text/csv",
@@ -531,6 +626,15 @@ def api_export_csv():
     )
 
 
+@app.route("/api/dashboard", methods=["GET"])
+def api_dashboard():
+    return jsonify({
+        "ok": True,
+        "stage": 296,
+        "dashboard": query_dashboard_summary(),
+    })
+
+
 if __name__ == "__main__":
     init_db()
-    app.run(host="127.0.0.1", port=2950, debug=True)
+    app.run(host="127.0.0.1", port=2960, debug=True)

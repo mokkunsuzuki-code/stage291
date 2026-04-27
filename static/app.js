@@ -17,6 +17,16 @@ const resultCard = document.getElementById("resultCard");
 const historyMeta = document.getElementById("historyMeta");
 const historyBox = document.getElementById("history");
 
+const metricTotal = document.getElementById("metricTotal");
+const metricAcceptRate = document.getElementById("metricAcceptRate");
+const metricRejectRate = document.getElementById("metricRejectRate");
+const metricUpstreamErrorRate = document.getElementById("metricUpstreamErrorRate");
+const metricAverageScore = document.getElementById("metricAverageScore");
+
+const decisionSummary = document.getElementById("decisionSummary");
+const upstreamSummary = document.getElementById("upstreamSummary");
+const scoreDistribution = document.getElementById("scoreDistribution");
+
 function decisionClass(decision) {
   if (decision === "accept") return "accept";
   if (decision === "pending") return "pending";
@@ -68,12 +78,9 @@ async function verifyAndSave() {
     return;
   }
 
-  if (!data.upstream_ok && data.upstream_error) {
-    console.warn("Stage289 upstream error:", data.upstream_error);
-  }
-
   renderResult(data.result, data.id);
   await loadHistory();
+  await loadDashboard();
 }
 
 function buildQueryString() {
@@ -154,6 +161,38 @@ async function loadDetail(id) {
   manifestInput.value = data.item.manifest_text;
 }
 
+async function loadDashboard() {
+  const res = await fetch("/api/dashboard");
+  const data = await res.json();
+  if (!data.ok) {
+    return;
+  }
+
+  const d = data.dashboard;
+
+  metricTotal.textContent = d.total_results;
+  metricAcceptRate.textContent = `${d.decision_rates.accept_rate}%`;
+  metricRejectRate.textContent = `${d.decision_rates.reject_rate}%`;
+  metricUpstreamErrorRate.textContent = `${d.upstream_rates.upstream_error_rate}%`;
+  metricAverageScore.textContent = Number(d.trust_score.average).toFixed(3);
+
+  decisionSummary.innerHTML = `
+    <div>accept: ${d.decision_counts.accept}</div>
+    <div>pending: ${d.decision_counts.pending}</div>
+    <div>reject: ${d.decision_counts.reject}</div>
+  `;
+
+  upstreamSummary.innerHTML = `
+    <div>ok: ${d.upstream_counts.ok}</div>
+    <div>error: ${d.upstream_counts.error}</div>
+    <div>unknown: ${d.upstream_counts.unknown}</div>
+  `;
+
+  scoreDistribution.innerHTML = Object.entries(d.trust_score.distribution)
+    .map(([label, count]) => `<div>${label}: ${count}</div>`)
+    .join("");
+}
+
 function escapeHtml(value) {
   return String(value || "")
     .replaceAll("&", "&amp;")
@@ -201,4 +240,5 @@ minScoreInput.addEventListener("input", updateExportLinks);
 limitInput.addEventListener("input", updateExportLinks);
 
 updateExportLinks();
+loadDashboard();
 loadHistory();
